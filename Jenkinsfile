@@ -1,56 +1,64 @@
 pipeline {
     environment {
         imagename = "dayagarv/maven_docker"
-        dockerimage = ""
-        containername = 'my-container'
-        dockerHubcredential = 'Jenkins'
+        dockerImage = ''
+        containerName = 'my-container'
+        dockerHubCredentials = 'jenkins'
     }
-
+ 
     agent any
-
+ 
     stages {
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '9ffd4ee4-3647-4a7d-a357-5e8746463282', url: 'https://bitbucket.org/ananthkannan/myawesomeangularapprepo/']]])
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/dayakarvpt/Jenkins_pipeline.git']]])
             }
         }
-
+   
         stage('Build') {
             steps {
-                sh 'mvn -f MyAwesomeApp/pom.xml clean install'
-            }
-        }
-
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: '**/*.jar', allowEmptyArchive: true
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
                 script {
-                    docker.withServer('tcp://localhost:4243') {
-                        docker.withRegistry('https://index.docker.io/v1/', 'fa32f95a-2d3e-4c7b-8f34-11bcc0191d70') {
-                            def image = docker.build("ananthkannan/mywebapp", "MyAwesomeApp")
-                            image.push()
-                        }
-                    }
+                    sh 'mvn -f MyAwesomeApp/pom.xml clean install'
                 }
             }
         }
-
-        stage('Docker Stop Container') {
-            steps {
-                sh 'docker ps -f name=myContainer -q | xargs --no-run-if-empty docker container stop'
-                sh 'docker container ls -a -f name=myContainer -q | xargs -r docker container rm'
-            }
-        }
-
-        stage('Docker Run') {
+ 
+        stage('Building Image') {
             steps {
                 script {
-                    docker.image("ananthkannan/mywebapp").run("-p 8085:8085 --rm --name myContainer")
+                    dockerImage = docker.build("${imagename}:latest", "MyAwesomeApp")
+                }
+            }
+        }
+ 
+        stage('Running Image') {
+            steps {
+                script {
+                    sh "docker run -d --name ${containerName} ${imagename}:latest"
+                    // Perform any additional steps needed while the container is running
+                }
+            }
+        }
+ 
+        stage('Stop and Remove Container') {
+            steps {
+                script {
+                    sh "docker stop ${containerName} || true"
+                    sh "docker rm ${containerName} || true"
+                }
+            }
+        }
+ 
+        stage('Deploy Image') {
+            steps {
+                script {
+                    // Use Jenkins credentials for Docker Hub login
+                    withCredentials([usernamePassword(credentialsId: dockerHubCredentials, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh "docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD"
+ 
+                        // Push the image
+                        sh "docker push ${imagename}:latest"
+                    }
                 }
             }
         }
