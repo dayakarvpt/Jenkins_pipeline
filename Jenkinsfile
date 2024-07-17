@@ -18,7 +18,7 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    sh 'mvn -f MyAwesomeApp/pom.xml clean install'
+                    sh 'mvn -f pom.xml clean install'
                 }
             }
         }
